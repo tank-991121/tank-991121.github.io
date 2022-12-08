@@ -1,0 +1,702 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, height=device-height, initial-scale=0.6">
+<meta http-equiv="Content-type" content="text/html; charset=utf-8" />
+<title>Tank Status</title>
+<link rel = "icon" href = "ticon.png" type = "image/x-icon">
+	<!-- <script src="js/utils.js"> </script> -->
+
+	<script src="js/chart.js"> </script>
+	<script src="js/chartjs-plugin-datalabels.min.js"> </script>
+	
+	<script>
+			tankUtils = { 	'TankFullReading' : 9 ,     // Distance in cm  from sensor when full
+
+							'TankHeight'      : 110 ,   // Distance of Tank bottom level in cm from sensor
+
+							'SOUND_SPEED'     : 0.034 , // Speed of Sound to calc. distance from echo time
+
+							'DataPointsCount' : 72 ,    // Minimum No. of data points to display in chart
+
+						 'lastValtoCalculate' : -3 ,    // No. of datapoints to calc. water level % and Filling detection
+
+							'increaseRate'    : 2 ,     // Minimum inc. rate of water level to assume Filling 
+							'atleastIncCount' : 2 ,     // Minimum no. of datapoints differences to detect filling
+
+							'readingInterval' : 5 ,     // Time in minutes between two consecutive readings
+
+							}
+
+
+			COUNT = 70
+
+			sheetId = '1C_XZzV2G72Bd-LXeNZH2t7B3ZgorkbSOCJKGv3DUx24'
+			sheetId = '1EjHafaoLjDu9_IGTquP3q-5RFIgZ6Z-i9pEN0wvgv58'
+			GQL_query = encodeURIComponent('SELECT * ORDER BY A DESC LIMIT') // 'SELECT+*+ORDER+BY+A+DESC+LIMIT'
+
+			sheetURL = 'https://docs.google.com/spreadsheets/d/'+sheetId+'/gviz/tq?tqx=out:csv&gid=0&tq='+GQL_query
+
+
+			defaultCOUNT = 70 // To check & Update COUNT
+	</script>
+	
+	<script>
+			const CHART_COLORS = {
+			  red: 'rgb(255, 99, 132)',
+			  orange: 'rgb(255, 159, 64)',
+			  yellow: 'rgb(255, 205, 86)',
+			  //green: 'rgb(75, 192, 192)',
+			  green: '#00e676',
+			  blue: 'rgb(54, 162, 235)',
+			  purple: 'rgb(153, 102, 255)',
+			  grey: 'rgb(201, 203, 207)'
+			};
+
+			const NAMED_COLORS = [
+			  CHART_COLORS.red,
+			  CHART_COLORS.orange,
+			  CHART_COLORS.yellow,
+			  CHART_COLORS.green,
+			  CHART_COLORS.blue,
+			  CHART_COLORS.purple,
+			  CHART_COLORS.grey,
+			];
+	</script>
+
+	<style>
+
+	.button-8 {
+	  background-color: #e1ecf4;
+	  border-radius: 3px;
+	  border: 1px solid #7aa7c7;
+	  box-shadow: rgba(255, 255, 255, .7) 0 1px 0 0 inset;
+	  box-sizing: border-box;
+	  color: #39739d;
+	  cursor: pointer;
+	  display: inline-block;
+	  font-family: -apple-system,system-ui,"Segoe UI","Liberation Sans",sans-serif;
+	  font-size: 13px;
+	  font-weight: 400;
+	  line-height: 1.15385;
+	  margin: 0;
+	  outline: none;
+	  padding: 8px .8em;
+	  position: relative;
+	  text-align: center;
+	  text-decoration: none;
+	  user-select: none;
+	  -webkit-user-select: none;
+	  touch-action: manipulation;
+	  vertical-align: baseline;
+	  white-space: nowrap;
+	}
+
+	.button-8:hover,
+	.button-8:focus {
+	  background-color: #b3d3ea;
+	  color: #2c5777;
+	}
+
+	.button-8:focus {
+	  box-shadow: 0 0 0 4px rgba(0, 149, 255, .15);
+	}
+
+	.button-8:active {
+	  background-color: #a0c7e4;
+	  box-shadow: none;
+	  color: #2c5777;
+	}
+
+	/*****************************************************************************************************************/
+
+	.relative {
+	  position: relative;
+	}
+
+	.absolute-center {
+	  position:absolute;
+	  top: 50%;
+	  left: 50%;
+	  transform: translate(-50%, -50%);
+	}
+
+	.text-center{
+	  text-align: center;
+	}
+
+	#currentpercent {
+	  font-size: 300%;
+	  font-weight: bold;
+	  font-family: 'Comic Sans MS' ;
+	}
+
+	#heading {
+	  font-size: 200%;
+	  font-weight: bold;
+	  font-family: 'Comic Sans MS' ;
+	}
+	
+	#subheading{
+	  font-size: 65%;
+	  font-weight: 100;
+	  color: #616161;
+	  font-family: 'Comic Sans MS' ;
+	}
+
+	#fillingstatus{
+	  font-size: 200%;
+	  font-weight: bold;
+	  color: #0288d1;
+	  font-family: "Trebuchet MS" ; /* "Times New Roman", Times, serif; */
+	  text-decoration: overline underline;
+	}
+	
+	.cellpadding {
+		/* padding: 15px; 
+		text-align: center; */
+		padding-top: 10px;
+		padding-bottom: 300px;
+		padding-left: 10px;
+		padding-right: 20px;	
+	}
+
+	.linktext {
+	  color: #000000;
+	  text-decoration: none;
+	}
+
+	</style>
+
+
+</head>
+<body>
+	<body style="background-color:#f7fafcf7;">
+	<!--
+	<div class="relative">
+	<canvas id="myChart"></canvas>      
+	<div class="absolute-center text-center"><p>Some text</p><p>Some text</p></div></div>
+
+	<div align="center" width="auto" height="auto">
+	<div style="display: inline-block"> <canvas id="myChart" width="700" height="400"></canvas> </div>
+	<div style="display: inline-block"> <div class="relative"><canvas id="myChart2" width="100" height="600"></canvas> <div class="absolute-center text-center"><p id="currentpercent"></p></div></div></div>
+	</div>
+	-->
+	<center>
+	<br><div id="fillingstatus"></div>
+
+	<table width="100%">
+	  <tr id="heading">
+			<th style="width:90%"><a style="text-decoration:none" target="_blank" href=""><span class="linktext">Water Level</span></a><div id="subheading"></div></th> <th>Current %</th>
+	  </tr>
+	  <tr style="height:500px">
+			<td><canvas id="myChart" ></canvas></td>
+			<td class="cellpadding"><div class="relative"><canvas id="myChart2" width="200" height="200"></canvas> <div class="absolute-center text-center"><span id="currentpercent"></span><span id="heading">%</span></div></div></td>
+	  </tr>
+	  <tr> <td><br><center>
+			<!-- <form action="/data/chart.php" method="get"> COUNT=COUNT+70; -->
+				<button id="viewmore" class="button-8" name="data" value="72" onclick="count=COUNT+defaultCOUNT; getTankStatus(count)">View More</button>
+				&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+				<button id="viewless" class="button-8" name="data" value="72" onclick="count=COUNT-defaultCOUNT; getTankStatus(count)">View Less</button>
+				<!-- <button  type="submit"  onclick="updateby(70)"></button> -->
+			<!-- </form> -->
+			<br></center></td>
+	       <td></td>
+	  </tr>
+	  <br>
+	</table>
+	</center>	
+	
+	<script>
+    // Raleway   Verdana  Helvetica
+	document.getElementsByTagName('a')[0].href = 'https://docs.google.com/spreadsheets/d/'+sheetId
+
+	console.log('TankFull Reading:',tankUtils['TankFullReading'],', Tank Height:',tankUtils['TankHeight'])
+	// Current settings takes Last 3 points in cm , Calc. 2 differences. If both are atleast 2 then it is Filling & Filling Rate is their avg.
+	lastValtoCalculate = tankUtils['lastValtoCalculate'], readingInterval = tankUtils['readingInterval']
+	// increaseRate: Different bt two pt. ; atleastIncCount:min no. differences > incRate
+	increaseRate = tankUtils['increaseRate'], atleastIncCount = tankUtils['atleastIncCount'] 
+
+	viewmoreInc = tankUtils['DataPointsCount'] // No. of points to increment & Also equal to Starting points 
+	
+	
+	function datetoLabelFormat(item) // Into :: d/m - h:i a
+	{	dt = new Date(item)
+		dtformat = String(dt.getDay()).padStart(2,'0')+'/'+String(dt.getMonth()).padStart(2,'0')+' - '+ String((dt.getHours()>12)?dt.getHours()-12:dt.getHours()).padStart(2,'0')+':'+dt.getMinutes()+' '+((dt.getHours()>12)?'pm':'am')
+		return dtformat
+	}
+
+    // Update Chart based on button type
+	var dataPoints  = tankUtils['DataPointsCount'] ;  console.log(' Displaying '+dataPoints+' DataPoints') // Get Current No. of displayed data point from php 
+	
+	viewmoreVal = document.getElementById('viewmore').value
+	viewlessVal = document.getElementById('viewless').value
+	viewlessVal = (viewlessVal!=0) ? viewlessVal : viewmoreInc // To keep least values as viewmoreInc
+	//console.log('viewmoreVal:',viewmoreVal) ; console.log('viewlessVal:',viewlessVal)
+
+	if (viewmoreVal == viewmoreInc)  viewmoreVal = dataPoints + viewmoreInc
+	if (viewlessVal == viewmoreInc)  viewlessVal = dataPoints - viewmoreInc
+
+	document.getElementById('viewmore').value = viewmoreVal
+	document.getElementById('viewless').value = (viewlessVal!=0) ? viewlessVal : viewmoreInc
+
+
+
+/////####################################### Main Function #######################################/////
+function parseData(sheetdata) {
+
+	// Get Data from sheet
+	xfullLabels=[]; ySensordata=[]; // Raw values from sheet
+	xlabels=[];ydata=[] // Formatted Values
+	xfullFormattedLabels=[]; 
+	
+	var xValues     = xlabels ;      var yValues     = ydata ; // Water Level in %
+	var xfullValues = xfullLabels ;  var ySensorValues = ySensordata ; // Distance from sensor in cm
+	var xfullFormattedValues = xfullFormattedLabels ; // Date & Time Custom time format
+
+    tankrows = sheetdata.split('\n').slice(1,).reverse()
+	console.log(' No. of Data Rows : ',tankrows.length)
+    for (row of tankrows)
+    {
+        [date, duration, distance] = row.split(',').map((x) => x.replaceAll('"',''))  //.map(function(x){return x.replace('"','')})
+        
+        xfullLabels.push(date); ySensordata.push(distance)
+        
+        tankPercent = ((tankUtils['TankHeight'] - distance + tankUtils['TankFullReading'])/tankUtils['TankHeight'])*100
+        xlabels.push(datetoLabelFormat(date).split(' - ')[1]) ; ydata.push(tankPercent)
+        
+        xfullFormattedLabels.push(datetoLabelFormat(date))
+        //console.log(date,distance)
+	}
+	
+	//  View Data
+	//console.log('xValues: ',xValues,'\nyValues: ',yValues,'\nxfullValues: ',xfullValues, '\nySensorValues: ',ySensorValues, '\nxfullFormattedValues: ',xfullFormattedValues)
+	//console.log(' No. of Data Points : ',xValues.length)
+
+	// Set chart.js label values based on Viewmore & Viewless buttons
+	xlabelHrs = Math.round(xValues.length/(60/readingInterval))
+	xLabelInfo = ' ('+xlabelHrs+' Hrs.)' ; xdatavalues = xValues // Change x values & Labels if viewing points of less than 1 day
+	pointRadius = 1.2
+	if  (xlabelHrs>23)
+	{	xdatavalues = xfullFormattedValues;
+		xlabelDays = Math.floor(xlabelHrs/24);
+		xlabelDaysStr = xlabelDays+( (xlabelDays==1) ? ' day' : ' days' )           ;  //xlabelHrs = xlabelHrs%24
+		xlabelHrsStr = (xlabelHrs%24) ? ' & '+(xlabelHrs%24)+' hrs.' : ''
+		xLabelInfo =  ' ('+xlabelDaysStr + xlabelHrsStr+')'
+
+		pointRadius = 0
+	}
+
+	calETAarray = [60,65,70,75,80] // Testing
+	//ySensorValues = ySensorValues.slice(0,-14)
+	calETAarray = ySensorValues.slice((lastValtoCalculate),) // Last 3 values of Water level in CM 
+
+
+	function checkIfFilling(dtarray)
+	{	elem=dtarray[0]; diffArray=[]; diffCount=0;
+		for (var i=1; i<dtarray.length; i++)
+		{	diff = elem - dtarray[i]
+			if (diff>=increaseRate) { diffCount+=1;  diffArray.push(diff) }
+			elem=dtarray[i]
+		}
+		return [diffCount,diffArray]
+	}
+
+	function checkIfFillingfromWaterLevel(dtarray)
+	{	elem=dtarray[0]; diffArray=[]; diffCount=0;
+		for (var i=1; i<dtarray.length; i++)
+		{	diff = dtarray[i]-elem
+			if (diff>=increaseRate) { diffCount+=1;  diffArray.push(diff) }
+			elem=dtarray[i]
+		}
+		return [diffCount,diffArray]
+	}
+
+	function getLastUpdateDifference(updateTime)
+	{   difftime = new Date() - new Date(updateTime)
+		sec = difftime/1000
+		if (sec < 60) // seconds
+			return ( Math.round(sec)+' s. ago' )
+		else // minutes
+		{   min = sec/60
+			if (min<60)
+				return( Math.round(min)+' min. ago')
+			else //hours
+			{   hr = min/60
+				if (hr<24)
+					return( Math.round(hr)+' Hr. ago')
+				else
+					return( Math.round((hr/24))+' Dys.ago')	
+			}
+		}
+	}
+	
+	function setCurrentLevelColour(level)
+	{	if  (level>90)
+			return '#00e676'
+		else if (( 40 < level ) && ( level <= 90 ))
+			return CHART_COLORS.blue
+		else if (( 21 < level ) && ( level <= 40 ))
+			return CHART_COLORS.yellow
+		else
+			return CHART_COLORS.red
+	}
+
+    //===========================================================================================================
+
+	// Calc. & Show Current %
+	lastValues = yValues.slice(lastValtoCalculate+1, ) // Last (1 less than lastValtoCalculate) Elements
+	waterLevel =  lastValues.reduce((a, b) => a + b, 0) / lastValues.length //yValues.at(-1)  // Water Level in Percent for Doughnut graph
+	
+	// Get & Show last updated time in sec, min.
+	updateTime = xfullLabels.at(-1)
+	LastUpdated = getLastUpdateDifference(updateTime) 
+	// Show LastUpdated & Current %
+	document.getElementById('subheading').innerText = 'Updated: '+LastUpdated
+	document.getElementById('currentpercent').innerText = Math.round(waterLevel)// Put % inside doughnut chart
+	document.title = ' Water : '+Math.round(waterLevel)+'%'
+
+	// Check Increasing/Filling & Show ETA
+	incCount = checkIfFilling(calETAarray)[0] ;  incRate = checkIfFilling(calETAarray)[1]; ETAstr=''; console.log('incRate array:',calETAarray)
+	console.log('########################################################################################')
+	if (incCount>=atleastIncCount) // Check if Increasing
+	{	//incRate = incRate.reduce((a, b) => a + b, 0) / incRate.length; console.log('Rate:',incRate) // Avg. Filling Rate in cm per 5 minute
+		//avgLevel = calETAarray.reduce((a, b) => a + b, 0) / calETAarray.length; console.log('Avg. Water Level:',avgLevel) // Avg. Water Level
+
+		incRate = incRate.at(-1); console.log('Rate:',incRate) // Last Value of Filling Rate in cm per 5 minute
+		SensorDistanceCM = ySensorValues.at(-1) ; console.log('Sensor Distance Level: ', ySensorValues.at(-1)) 	// Sensor Distance in CM
+
+		console.log('Water Level CM:', tankUtils['TankHeight'] - ySensorValues.at(-1) + tankUtils['TankFullReading'],' Current Water %:',yValues.at(-1) ) 
+		
+		//$waterLevelCM = ($TankHeight - $row["distance"] + $TankFullReading) ;
+		// Calc. ETA
+		if (SensorDistanceCM >= tankUtils['TankFullReading'])
+		{
+		fillminutes = Math.round( (Math.abs(SensorDistanceCM - tankUtils['TankFullReading']) / (incRate/readingInterval)) ); console.log('Fill Minutes',fillminutes)
+		eta = new Date(new Date().getTime() + fillminutes * 60000)
+		ETA = ((eta.getHours()>12) ? eta.getHours()-12 : eta.getHours()) + ':'+ String(eta.getMinutes()).padStart(2,'0') + ( (eta.getHours() > 12)?' pm':' am' )
+		if (fillminutes < 60 ) ETAstr = fillminutes+' min.'
+		else ETAstr = Math.floor(fillminutes/60)+' Hr. & '+String(fillminutes%60).padStart(2,'0')+' min.'
+		// Show Filling
+		document.getElementById('fillingstatus').innerText = ' ↑ Filling in '+ETAstr+'  ('+ETA+')' ;
+		}
+		else  document.getElementById('fillingstatus').innerText = ' FILLED ' ;
+
+		// Update Doughnut Values
+		document.getElementById('currentpercent').innerText = Math.round(yValues.at(-1)) // Update water level % from yValues in Doughnut graph Centre
+		waterLevel = yValues.at(-1) // Current Value for Doughnut Slices if Filling
+	}
+
+
+
+     //********************************************************//  CHARTS    //******************************************************//
+	//Chart.register(ChartDataLabels); // Register Plugin Globally
+	
+	var ctx2 = document.getElementById("myChart2").getContext('2d');
+	var myPieChart = new Chart(ctx2, {
+		  type: "doughnut",
+		  plugins: [ChartDataLabels],
+		  data: {
+				  labels: [
+							'Empty',
+							'Filled',
+						  ],
+				  datasets: [{
+					label: 'Tank Filled %',
+					data: [ (waterLevel<=100)?(100-waterLevel):0, (waterLevel>100)?100:waterLevel],
+					//data: [ (waterLevel<100?(100-waterLevel):0), waterLevel],
+					backgroundColor: [
+										CHART_COLORS.grey,
+										setCurrentLevelColour(waterLevel),
+									],
+					hoverOffset: 4
+					}]
+			
+				},
+		  options: {
+			    //onAnimationProgress: drawSegmentValues ,
+				//showTooltips: false,
+				maintainAspectRatio : false, responsive: true,
+				plugins: {
+							title: // subtitle :
+									{ 	display: false,
+										text: 'Water Level',
+										font: { size: 25, },
+									},
+							legend: { display: false, position: 'top' }, //, align:'start'
+
+
+							datalabels: {
+										anchor: 'center',
+										align: 'center',
+										formatter: Math.round,
+										font: { size: 18,
+											//weight: 'bold',
+											family: 'Verdana',
+										},
+										
+							},
+
+						 },
+				title: {
+					display: false,
+					text: "Tank Filled %"
+				},
+				
+			/*	
+			animation: {
+				duration: 0,
+				onComplete: function() {
+					ctx = this.ctx;
+					ctx.font = Chart.helpers.fontString(Chart.defaults.font.size, Chart.defaults.font.style, Chart.defaults.font.family);
+					ctx.textAlign = 'center';
+					ctx.textBaseline = 'bottom';
+					chartinst = this;
+					this.data.datasets.forEach(function(dataset, i) {
+						if(chartinst.isDatasetVisible(i)){
+							var meta = chartinst.getDatasetMeta(i);
+							meta.data.forEach(function(bar, index) {
+								var data = dataset.data[index];
+								ctx.fillText(data, bar.x, bar.y - 5);
+							});
+						}
+					});
+				}
+			}, */
+
+
+		  },
+
+	})
+
+//=======================================================================================================================
+
+	// Index of data points to show label
+	showpoints = [ yValues.indexOf(Math.max(...yValues)), yValues.length-1 ];
+	showpointsLabel = {}; for (ptIndex of showpoints) showpointsLabel[ptIndex] = getLastUpdateDifference(xfullValues[ptIndex])
+	//console.log('showpoints: ',showpoints); console.log('showpointsLabel: ',showpointsLabel)
+
+	// Function for changing colour if slope is increasing or decreasing
+	const setUpDownColour = (ctx) => ((ctx.p0.parsed.y-ctx.p1.parsed.y) > (increaseRate-0.5)) ? CHART_COLORS.yellow : ( ((ctx.p1.parsed.y-ctx.p0.parsed.y) > increaseRate) ? CHART_COLORS.green : undefined ) ; 
+	const setUpDownWidth = (ctx) => (Math.abs(ctx.p0.parsed.y-ctx.p1.parsed.y) > (increaseRate-0.5)) ? 3.5 : undefined ; 
+	//const up = (ctx, value) => ((ctx.p1.parsed.y-ctx.p0.parsed.y) > increaseRate) ? value : undefined; 
+	
+	 
+	var ctx = document.getElementById("myChart").getContext('2d');
+	var myChart = new Chart(ctx, {
+	  plugins: [ChartDataLabels],
+	  data: {
+		labels: xdatavalues,
+		datasets: [{
+				type: "line",
+				fill: true,
+				//lineIntensity: 100,
+				tension: 0.4, // option is ignored if monotone cubic interpolation is used.
+
+				data: yValues,
+				//cubicInterpolationMode: 'monotone',
+				//cubicInterpolationMode: 'default',
+				label: 'Water Level',
+
+				//backgroundColor: Utils.transparentize(Utils.CHART_COLORS.blue, 0.5),  borderColor: Utils.CHART_COLORS.blue,
+				backgroundColor: "rgba(54, 162, 235, 0.2)",
+				// Default values of borderColor & borderWidth are set using segment
+				// borderColor: CHART_COLORS.blue,
+				// borderWidth: 1.5,
+
+				// Set colour based on increasing or decreasing
+				segment: {
+						borderColor: ctx => setUpDownColour(ctx) || CHART_COLORS.blue ,
+						borderWidth: ctx => setUpDownWidth(ctx) || 1.5 ,
+				},
+				
+			},
+			/*
+			{	type: "doughnut",
+				//labels: [ 'Empty', 'Filled', ],
+
+				label: 'Tank Filled %',
+				data: [(100-waterLeft), waterLeft],
+				backgroundColor: [  CHART_COLORS.grey, CHART_COLORS.blue, ],
+				hoverOffset: 4
+			},
+			*/
+		]
+	  },
+
+	  options: {
+		maintainAspectRatio : false, responsive: true,
+
+		elements: { 
+					point:{
+							//radius:(ctx) => (ctx.chart.data.datasets[ctx.datasetIndex].data.length - 1 === ctx.index ? 4 : pointRadius), // Chanage radius of last point
+							radius:(ctx) => ( (showpoints.includes(ctx.index)) ? 4 : pointRadius ), // Chanage radius of last point
+							pointStyle:'circle',
+							hoverRadius: 4.5,
+							hitRadius: 20,
+						  }
+				  },
+		plugins: {
+			
+			
+			datalabels: {	// Show Last Point & Apply below options
+							//display: function(context) { showpoints = [ 14 , 25 ] ; return context.dataIndex === context.dataset.data.length-1 },
+							// showpoints = [ context.dataset.data.length-1, context.dataset.data.indexOf(Math.max(...context.dataset.data)) ];
+							display: function(context)
+									{	
+										return (showpoints.includes(context.dataIndex)) ? true : false ;
+									},
+							
+							
+							//formatter: function(value, context) { return context.chart.data.labels[context.dataset.data.length-1]  },
+							// myChart.data.datasets[0].data
+							//context.dataset.data.indexOf(Math.max(...context.dataset.data))
+							
+							//formatter: function(value, context) { return value.toFixed(1)+'%'+'\n('+LastUpdated+')' },
+							formatter: function(value, context)
+										{ 	//keys(showpointsLabel).includes(context.dataIndex)
+											return value.toFixed(1)+'%'+'\n('+showpointsLabel[context.dataIndex]+')'
+										},
+							//formatter: (value, context) => context.datasetIndex == 2 ? value + '%' : ''
+							
+							anchor: 'end',
+							align: 'end',
+							//clamp: true,
+							offset: 5,
+							font: { size: 14,
+								//weight: 'bold',
+								family: 'Verdana',
+							},
+							
+						},
+			
+					title: // subtitle :
+							{  display: false,
+							   text: 'Water Level',
+							   font: { size: 25, },
+							},
+					legend:  { display: false, position: 'top' }, //, align:'start'
+					tooltip: {  backgroundColor: 'rgba(0, 0, 0, 0.5)',
+								callbacks: {
+											label: function(context) {
+												let label = context.dataset.label || '';
+
+												if (label) { label += ': '; }
+												if (context.parsed.y !== null) {  label += (context.parsed.y).toFixed(2)+'%'; }
+
+												return label;
+											}
+									}
+					},					
+					
+				 },
+		/*
+		animations: {
+			tension: {
+			duration: 1000,
+			easing: 'linear',
+			from: 1,
+			to: 0,
+			loop: true
+		  }
+		}, */		
+		
+		layout: {
+		 padding: {
+					left: 40,  right: 45,
+					top: 50,   bottom: 2
+				}
+		},
+		scales: {
+			    //yAxes: [ {ticks: {min: 6, max:16}} ],
+				x: {
+					display: true,
+					
+                            ticks: {
+                                font: { size: 15, family:'vazir'   }, // x Lables Size
+							},
+					
+					title: { display: true,
+							 text: 'Time'+xLabelInfo,
+							 color: '#37474f',
+							 font: {
+									family: 'Verdana',
+									size: 20,
+									//weight: 'bold',
+									lineHeight: 1.2,
+							      },
+						    //padding: {top: 20, left: 0, right: 0, bottom: 0}
+						   
+							},
+			
+					grid: {	 drawOnChartArea: false, },	 // grid line settings
+						 
+				},
+				y: {
+					suggestedMin: 15, suggestedMax: ((waterLevel>80)?100:90),
+					display: true,
+					title:  {  display: true,
+							   text: '% Filled',
+							   color: CHART_COLORS.blue,
+							   font: {
+									family: 'Verdana',
+									size: 20,
+									//weight: 'bold',
+									lineHeight: 1.2,
+							      },
+						    //padding: {top: 20, left: 0, right: 0, bottom: 0}							  
+ 
+							},
+
+					grid: {	 drawOnChartArea: true, },	 // grid line settings
+				},
+				//y1: { type: 'linear', display: true, position: 'right', },
+
+				}
+	  }
+	});
+	
+	/*
+	let count = 0;
+	setInterval(() => {
+	  if(count % 2 === 0) {
+		  myChart.data.datasets[0].pointStyle  = 'circle';
+		  //console.log(myChart.data.datasets[0].data)
+		  //console.log(myChart.config.data.datasets[0])
+		  //console.log(myChart.ctx)
+		  myChart.update();
+	  }
+	  else {
+		myChart.data.datasets[0].pointStyle = 'circle';
+		myChart.update();
+	  }
+	  count++;
+	}, 800);
+	*/
+	
+}	
+	///************ MAIN : Fetches Sheet Data & Shows in Chart ********************///	
+	function getTankStatus(count)
+	{	if (Chart.getChart("myChart")!=undefined) { Chart.getChart("myChart").destroy(); Chart.getChart("myChart2").destroy() }
+	
+		COUNT = (count > defaultCOUNT) ? count : defaultCOUNT; console.log('COUNT : ',COUNT)
+		fetch(sheetURL+'+'+COUNT)
+		.then(res => res.text())
+		.then(rep => {
+			//const jsonData = JSON.parse(rep.substring(47).slice(0, -2)); // for JSON data
+			parseData(rep)
+			//console.log(rep)
+
+		})
+	}
+
+	if (COUNT==defaultCOUNT)  getTankStatus(COUNT)
+	
+
+	// Reload Page every 30 seconds	
+	setTimeout(() => { document.location.reload(); }, 30000);
+
+</script>
+
+</body>
+</html>                              
